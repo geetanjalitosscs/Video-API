@@ -12,6 +12,7 @@ interface MediaMetadata {
   title?: string;
   description?: string;
   type?: 'video' | 'audio' | 'youtube';
+  uploadedAt?: string;
 }
 
 const METADATA_FILE = path.join(process.cwd(), 'public', 'uploads', 'metadata.json');
@@ -77,7 +78,7 @@ async function downloadAndSaveImage(imageUrl: string, filenameBase: string): Pro
     const buffer = await response.arrayBuffer();
     const contentType = response.headers.get('content-type') || 'image/jpeg';
     const ext = contentType.includes('png') ? '.png' : contentType.includes('webp') ? '.webp' : '.jpg';
-    
+
     const randomSuffix = randomBytes(4).toString('hex');
     const filename = `${filenameBase}_thumb_${randomSuffix}${ext}`;
 
@@ -115,7 +116,7 @@ export async function POST(request: NextRequest) {
     }
 
     const isYouTube = productUrl.includes('youtube.com') || productUrl.includes('youtu.be');
-    
+
     if (isYouTube) {
       const metadata = await extractYouTubeMetadata(productUrl);
       if (!metadata) {
@@ -127,13 +128,14 @@ export async function POST(request: NextRequest) {
 
       const allMetadata = await loadMetadata();
       const entryId = thumbFilename || `youtube_${randomBytes(4).toString('hex')}`;
-      
+
       allMetadata[entryId] = {
         filename: entryId,
         youtubeUrl: productUrl,
         title: metadata.title,
         description: `YouTube video by ${metadata.author_name}`,
-        type: 'youtube'
+        type: 'youtube',
+        uploadedAt: new Date().toISOString()
       };
 
       await saveMetadata(allMetadata);

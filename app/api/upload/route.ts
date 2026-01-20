@@ -25,6 +25,7 @@ interface MediaMetadata {
     description?: string;
     title?: string;
     type?: 'video' | 'audio' | 'youtube';
+    uploadedAt?: string;
 }
 
 export const dynamic = 'force-dynamic';
@@ -164,7 +165,8 @@ export async function POST(request: NextRequest) {
                     filename: savedFilename,
                     mediaUrl: productUrl || undefined,
                     title: baseName.replace(/_[a-zA-Z0-9]{16}$/, '').replace(/_/g, ' ').trim() || 'Untitled',
-                    type: isAudio ? 'audio' : 'video'
+                    type: isAudio ? 'audio' : 'video',
+                    uploadedAt: new Date().toISOString()
                 };
 
             } catch (error) {

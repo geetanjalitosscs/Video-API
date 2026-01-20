@@ -129,7 +129,7 @@ export async function GET(request: NextRequest) {
                             title: m.title || 'YouTube Video',
                             description: m.description || '',
                             type: 'youtube',
-                            uploadedAt: m.uploadedAt || null,
+                            uploadedAt: null,
                         };
                     });
 
@@ -173,7 +173,7 @@ export async function GET(request: NextRequest) {
                             title: m.title || 'YouTube Video',
                             description: m.description || '',
                             type: 'youtube',
-                            uploadedAt: m.uploadedAt || null,
+                            uploadedAt: null,
                         };
                     });
 
@@ -189,3 +189,4 @@ export async function GET(request: NextRequest) {
         return NextResponse.json({ error: 'Failed to fetch media' }, { status: 500 });
     }
 }
+
