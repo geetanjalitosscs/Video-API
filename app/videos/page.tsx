@@ -23,7 +23,7 @@ export default function MediaPage() {
     const fetchMedia = async () => {
         try {
             setLoading(true);
-            const response = await fetch('/api/videos', {
+            const response = await fetch(`/api/videos?t=${Date.now()}`, {
                 cache: 'no-store',
                 headers: {
                     'Cache-Control': 'no-cache'
