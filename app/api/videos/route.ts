@@ -29,18 +29,28 @@ function isValidMediaFile(filename: string): boolean {
     return ALLOWED_EXTENSIONS.includes(ext);
 }
 
+function formatToIST(dateInput: any): string | null {
+    if (!dateInput) return null;
+    try {
+        const date = new Date(dateInput);
+        if (isNaN(date.getTime())) return String(dateInput);
+
+        return new Intl.DateTimeFormat('en-IN', {
+            timeZone: 'Asia/Kolkata',
+            day: '2-digit',
+            month: 'short',
+            year: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit',
+            hour12: true
+        }).format(date).replace(',', '');
+    } catch {
+        return String(dateInput);
+    }
+}
+
 function getISTTimestamp(): string {
-    const now = new Date();
-    // Use Intl.DateTimeFormat for robust IST formatting
-    return new Intl.DateTimeFormat('en-IN', {
-        timeZone: 'Asia/Kolkata',
-        day: '2-digit',
-        month: 'short',
-        year: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit',
-        hour12: true
-    }).format(now).replace(',', '');
+    return formatToIST(new Date()) || '';
 }
 
 async function loadMetadata(): Promise<Record<string, MediaMetadata> | null> {
@@ -150,7 +160,7 @@ export async function GET(request: NextRequest) {
                             description: fileMetadata.description || (isAudio ? 'Audio file' : 'Video file'),
                             type: fileMetadata.type || (isAudio ? 'audio' : 'video'),
                             size: (blob as any).size || null,
-                            uploadedAt: fileMetadata.uploadedAt || (blob as any).uploadedAt || null,
+                            uploadedAt: formatToIST(fileMetadata.uploadedAt || (blob as any).uploadedAt),
                         };
                     });
 
@@ -202,7 +212,7 @@ export async function GET(request: NextRequest) {
                             description: fileMetadata.description || '',
                             type: isAudio ? 'audio' : 'video',
                             size: stats ? stats.size : null,
-                            uploadedAt: stats ? stats.mtime.toISOString() : null,
+                            uploadedAt: formatToIST(fileMetadata.uploadedAt || (stats ? stats.mtime : null)),
                         };
                     });
 
