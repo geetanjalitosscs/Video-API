@@ -29,7 +29,7 @@ function isValidMediaFile(filename: string): boolean {
     return ALLOWED_EXTENSIONS.includes(ext);
 }
 
-async function loadMetadata(): Promise<Record<string, MediaMetadata>> {
+async function loadMetadata(): Promise<Record<string, MediaMetadata> | null> {
     try {
         if (IS_VERCEL) {
             if (!process.env.BLOB_READ_WRITE_TOKEN) return {};
@@ -38,21 +38,25 @@ async function loadMetadata(): Promise<Record<string, MediaMetadata>> {
                 if (blobs.blobs.length > 0) {
                     const response = await fetch(blobs.blobs[0].url, { cache: 'no-store' });
                     if (response.ok) return await response.json();
+                    if (response.status === 404) return {};
+                    return null; // Error response from blob storage
                 }
+                return {}; // No metadata blob yet
             } catch (error) {
-                console.error('Error loading metadata from blob:', error);
+                console.error('Error listing/fetching metadata from blob:', error);
+                return null;
             }
-            return {};
         } else {
             if (existsSync(METADATA_FILE)) {
                 const content = await readFile(METADATA_FILE, 'utf-8');
                 return JSON.parse(content);
             }
+            return {};
         }
     } catch (error) {
         console.error('Error loading metadata:', error);
+        return null;
     }
-    return {};
 }
 
 export const dynamic = 'force-dynamic';
@@ -60,7 +64,13 @@ export const revalidate = 0;
 
 export async function GET(request: NextRequest) {
     try {
-        const metadata = await loadMetadata();
+        const metadataResult = await loadMetadata();
+        if (metadataResult === null) {
+            console.error('Metadata failed to load. Aborting to prevent data corruption.');
+            // Fallback to empty if we can't load, but we should be careful
+            // Actually, for listing, it's safer to show what we have (blobs) even if metadata titles are missing
+        }
+        const metadata = metadataResult || {};
         let mediaFiles: any[] = [];
 
         if (IS_VERCEL) {

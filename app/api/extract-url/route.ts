@@ -23,7 +23,7 @@ const IS_VERCEL = process.env.VERCEL === '1';
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
-async function loadMetadata(): Promise<Record<string, MediaMetadata>> {
+async function loadMetadata(): Promise<Record<string, MediaMetadata> | null> {
   try {
     if (IS_VERCEL) {
       if (!process.env.BLOB_READ_WRITE_TOKEN) return {};
@@ -33,21 +33,25 @@ async function loadMetadata(): Promise<Record<string, MediaMetadata>> {
         if (blobs.blobs.length > 0) {
           const response = await fetch(blobs.blobs[0].url, { cache: 'no-store' });
           if (response.ok) return await response.json();
+          if (response.status === 404) return {};
+          return null;
         }
+        return {};
       } catch (error) {
         console.error('Error loading metadata from blob:', error);
+        return null;
       }
-      return {};
     } else {
       if (existsSync(METADATA_FILE)) {
         const content = await readFile(METADATA_FILE, 'utf-8');
         return JSON.parse(content);
       }
+      return {};
     }
   } catch (error) {
     console.error('Error loading metadata:', error);
+    return null;
   }
-  return {};
 }
 
 async function saveMetadata(metadata: Record<string, MediaMetadata>): Promise<void> {
@@ -126,7 +130,11 @@ export async function POST(request: NextRequest) {
       const sanitizedTitle = metadata.title.replace(/[^a-zA-Z0-9]/g, '_').toLowerCase().substring(0, 50);
       const thumbFilename = await downloadAndSaveImage(metadata.thumbnail_url, sanitizedTitle);
 
-      const allMetadata = await loadMetadata();
+      const metadataResult = await loadMetadata();
+      if (metadataResult === null) {
+        return NextResponse.json({ error: 'Failed to access media registry' }, { status: 503 });
+      }
+      const allMetadata = metadataResult;
       const entryId = thumbFilename || `youtube_${randomBytes(4).toString('hex')}`;
 
       allMetadata[entryId] = {

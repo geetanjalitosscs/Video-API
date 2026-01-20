@@ -22,7 +22,7 @@ interface MediaMetadata {
     type?: 'video' | 'audio' | 'youtube';
 }
 
-async function loadMetadata(): Promise<Record<string, MediaMetadata>> {
+async function loadMetadata(): Promise<Record<string, MediaMetadata> | null> {
     try {
         if (IS_VERCEL) {
             if (!process.env.BLOB_READ_WRITE_TOKEN) return {};
@@ -31,21 +31,25 @@ async function loadMetadata(): Promise<Record<string, MediaMetadata>> {
                 if (blobs.blobs.length > 0) {
                     const response = await fetch(blobs.blobs[0].url, { cache: 'no-store' });
                     if (response.ok) return await response.json();
+                    if (response.status === 404) return {};
+                    return null;
                 }
+                return {};
             } catch (error) {
                 console.error('Error loading metadata from blob:', error);
+                return null;
             }
-            return {};
         } else {
             if (existsSync(METADATA_FILE)) {
                 const content = await readFile(METADATA_FILE, 'utf-8');
                 return JSON.parse(content);
             }
+            return {};
         }
     } catch (error) {
         console.error('Error loading metadata:', error);
+        return null;
     }
-    return {};
 }
 
 async function saveMetadata(metadata: Record<string, MediaMetadata>): Promise<void> {
@@ -78,7 +82,8 @@ export async function GET(
             return NextResponse.json({ error: 'Filename required' }, { status: 400 });
         }
 
-        const metadata = await loadMetadata();
+        const metadataResult = await loadMetadata();
+        const metadata = metadataResult || {};
         const itemMetadata = metadata[filename];
         const isThumbRequest = request.nextUrl.searchParams.get('thumb') === 'true';
 
@@ -145,7 +150,11 @@ export async function DELETE(
             return NextResponse.json({ error: 'Filename required' }, { status: 400 });
         }
 
-        const metadata = await loadMetadata();
+        const metadataResult = await loadMetadata();
+        if (metadataResult === null) {
+            return NextResponse.json({ error: 'Failed to access media registry' }, { status: 503 });
+        }
+        const metadata = metadataResult;
         const decodedFilename = decodeURIComponent(filename);
 
         console.log(`Attempting to delete: ${filename} (decoded: ${decodedFilename})`);
@@ -185,21 +194,23 @@ export async function DELETE(
 
         // Cleanup metadata: Search and destroy any entry matching the filename or decoded filename
         let deletedFromMetadata = false;
-        const keysToDelete = Object.keys(metadata).filter(key =>
-            key === filename ||
-            key === decodedFilename ||
-            metadata[key].filename === filename ||
-            metadata[key].filename === decodedFilename
-        );
+        if (metadata) {
+            const keysToDelete = Object.keys(metadata).filter(key =>
+                key === filename ||
+                key === decodedFilename ||
+                metadata[key].filename === filename ||
+                metadata[key].filename === decodedFilename
+            );
 
-        keysToDelete.forEach(key => {
-            delete metadata[key];
-            deletedFromMetadata = true;
-        });
+            keysToDelete.forEach(key => {
+                delete metadata[key];
+                deletedFromMetadata = true;
+            });
 
-        if (deletedFromMetadata) {
-            await saveMetadata(metadata);
-            console.log(`Metadata cleaned for: ${filename}`);
+            if (deletedFromMetadata) {
+                await saveMetadata(metadata);
+                console.log(`Metadata cleaned for: ${filename}`);
+            }
         }
 
         return NextResponse.json({

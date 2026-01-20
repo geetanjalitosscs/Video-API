@@ -46,7 +46,7 @@ function generateUniqueFilename(originalName: string): string {
     return `${sanitized}_${randomSuffix}${ext}`;
 }
 
-async function loadMetadata(): Promise<Record<string, MediaMetadata>> {
+async function loadMetadata(): Promise<Record<string, MediaMetadata> | null> {
     try {
         if (IS_VERCEL) {
             if (!process.env.BLOB_READ_WRITE_TOKEN) return {};
@@ -56,21 +56,25 @@ async function loadMetadata(): Promise<Record<string, MediaMetadata>> {
                 if (blobs.blobs.length > 0) {
                     const response = await fetch(blobs.blobs[0].url, { cache: 'no-store' });
                     if (response.ok) return await response.json();
+                    if (response.status === 404) return {};
+                    return null;
                 }
+                return {};
             } catch (error) {
                 console.error('Error loading metadata from blob:', error);
+                return null;
             }
-            return {};
         } else {
             if (existsSync(METADATA_FILE)) {
                 const content = await readFile(METADATA_FILE, 'utf-8');
                 return JSON.parse(content);
             }
+            return {};
         }
     } catch (error) {
         console.error('Error loading metadata:', error);
+        return null;
     }
-    return {};
 }
 
 async function saveMetadata(metadata: Record<string, MediaMetadata>): Promise<void> {
@@ -105,7 +109,13 @@ export async function POST(request: NextRequest) {
 
         const uploadedFiles: string[] = [];
         const errors: string[] = [];
-        const metadata = await loadMetadata();
+        const metadataResult = await loadMetadata();
+
+        if (metadataResult === null) {
+            return NextResponse.json({ error: 'Failed to access media registry. Please try again soon.' }, { status: 503 });
+        }
+
+        const metadata = metadataResult;
 
         for (const file of files) {
             if (!(file instanceof File)) {
