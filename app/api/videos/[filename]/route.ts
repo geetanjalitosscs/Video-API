@@ -146,9 +146,12 @@ export async function DELETE(
         }
 
         const metadata = await loadMetadata();
-        const itemMetadata = metadata[filename];
+        const decodedFilename = decodeURIComponent(filename);
+
+        console.log(`Attempting to delete: ${filename} (decoded: ${decodedFilename})`);
 
         if (IS_VERCEL) {
+            const { list, del } = await import('@vercel/blob');
             let allBlobs: any[] = [];
             let cursor: string | undefined = undefined;
 
@@ -158,29 +161,55 @@ export async function DELETE(
                 cursor = result.cursor;
             } while (cursor);
 
-            const decodedFilename = decodeURIComponent(filename);
             const blob = allBlobs.find((b: any) => {
                 const blobFilename = b.pathname.split('/').pop() || b.pathname;
                 return blobFilename === decodedFilename || blobFilename === filename;
             });
 
             if (blob) {
+                console.log(`Found blob to delete: ${blob.url}`);
                 await del(blob.url);
+            } else {
+                console.warn(`Blob not found in storage: ${filename}`);
             }
         } else {
             const filePath = path.join(UPLOAD_DIR, filename);
+            const decodedPath = path.join(UPLOAD_DIR, decodedFilename);
+
             if (existsSync(filePath)) {
                 await unlink(filePath);
+            } else if (existsSync(decodedPath)) {
+                await unlink(decodedPath);
             }
         }
 
-        // Cleanup metadata
-        if (metadata[filename]) {
-            delete metadata[filename];
+        // Cleanup metadata: Search and destroy any entry matching the filename or decoded filename
+        let deletedFromMetadata = false;
+        const keysToDelete = Object.keys(metadata).filter(key =>
+            key === filename ||
+            key === decodedFilename ||
+            metadata[key].filename === filename ||
+            metadata[key].filename === decodedFilename
+        );
+
+        keysToDelete.forEach(key => {
+            delete metadata[key];
+            deletedFromMetadata = true;
+        });
+
+        if (deletedFromMetadata) {
             await saveMetadata(metadata);
+            console.log(`Metadata cleaned for: ${filename}`);
         }
 
-        return NextResponse.json({ success: true, message: 'Media deleted successfully' });
+        return NextResponse.json({
+            success: true,
+            message: 'Media deleted successfully',
+            details: {
+                storageDeleted: true,
+                metadataCleaned: deletedFromMetadata
+            }
+        });
     } catch (error) {
         console.error('Error deleting media:', error);
         return NextResponse.json({ error: 'Failed to delete media' }, { status: 500 });
