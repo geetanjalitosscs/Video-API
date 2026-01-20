@@ -1,22 +1,20 @@
-# Media API (Video & Audio)
+# 🎬 Video_API: Modern Media Management
 
-A full-featured Media Upload and Player application built with Next.js. Supports all video formats and MP3 files.
+A high-performance Media Management System built with **Next.js**, featuring hybrid storage support for both local development and **Vercel Blob** production environments.
 
-## Features
-- **Broad Format Support**: MP4, WebM, MKV, AVI, MOV, MP3, WAV, etc.
-- **Large File Support**: Upload files up to 100MB.
-- **Unified Media Player**: Play both video and audio files in a custom player.
-- **Dual Storage**: Local and Vercel Blob storage support.
-- **Clean UI**: Responsive gallery and intuitive upload interface.
+## 🚀 Key Features
+- **Broad Format Support**: Works with all major video and audio formats (MP4, MP3, etc.).
+- **YouTube Integration**: Paste a link to instantly add YouTube videos with full metadata and thumbnails.
+- **Production Ready**: Optimized for Vercel with relative URLs and Blob storage.
+- **Modern UI**: Polished gallery and detail pages with dark-mode focus.
 
-## Quick Start
-1. `cd Video_API`
-2. `npm install`
-3. `npm run dev`
-4. Visit `http://localhost:3001`
+## 🛠️ Quick Start
+1. `npm install`
+2. `npm run dev`
+3. Visit `http://localhost:3001` or your **Local IP Address** (e.g., `http://192.168.1.5:3001`) to access from other devices on the same network.
 
-## API Endpoints
-- `POST /api/upload` - Upload media (use field name `media`)
-- `GET /api/videos` - Get all media files
-- `GET /api/videos/[filename]` - Serve raw media
-- `GET /api/videos/[filename]/info` - Get media metadata
+## 📖 Documentation
+For a full technical breakdown, API reference, and Vercel deployment steps, please refer to the **[Project Documentation](C:\Users\geeta\.gemini\antigravity\brain\73ed1d4d-da27-4cfa-af11-d67c51cec887\MASTER_DOCUMENTATION.md)**.
+
+---
+*Created with ❤️ by Antigravity*
