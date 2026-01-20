@@ -31,6 +31,19 @@ interface MediaMetadata {
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
+function getISTTimestamp(): string {
+    const now = new Date();
+    return new Intl.DateTimeFormat('en-IN', {
+        timeZone: 'Asia/Kolkata',
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: true
+    }).format(now).replace(',', '');
+}
+
 function sanitizeFilename(filename: string): string {
     return filename
         .replace(/[^a-zA-Z0-9.-]/g, '_')

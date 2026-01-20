@@ -23,6 +23,19 @@ const IS_VERCEL = process.env.VERCEL === '1';
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
+function getISTTimestamp(): string {
+  const now = new Date();
+  return new Intl.DateTimeFormat('en-IN', {
+    timeZone: 'Asia/Kolkata',
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: true
+  }).format(now).replace(',', '');
+}
+
 async function loadMetadata(): Promise<Record<string, MediaMetadata> | null> {
   try {
     if (IS_VERCEL) {
