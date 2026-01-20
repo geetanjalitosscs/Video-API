@@ -176,7 +176,7 @@ export async function POST(request: NextRequest) {
                     mediaUrl: productUrl || undefined,
                     title: baseName.replace(/_[a-zA-Z0-9]{16}$/, '').replace(/_/g, ' ').trim() || 'Untitled',
                     type: isAudio ? 'audio' : 'video',
-                    uploadedAt: new Date().toISOString()
+                    uploadedAt: getISTTimestamp()
                 };
 
             } catch (error) {

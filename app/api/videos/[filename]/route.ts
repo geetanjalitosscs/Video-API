@@ -29,7 +29,8 @@ async function loadMetadata(): Promise<Record<string, MediaMetadata> | null> {
             try {
                 const blobs = await list({ prefix: METADATA_BLOB_NAME, limit: 1 });
                 if (blobs.blobs.length > 0) {
-                    const response = await fetch(blobs.blobs[0].url, { cache: 'no-store' });
+                    const cacheBuster = `?t=${Date.now()}`;
+                    const response = await fetch(blobs.blobs[0].url + cacheBuster, { cache: 'no-store' });
                     if (response.ok) return await response.json();
                     if (response.status === 404) return {};
                     return null;

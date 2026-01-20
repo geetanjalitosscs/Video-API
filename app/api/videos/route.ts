@@ -29,6 +29,20 @@ function isValidMediaFile(filename: string): boolean {
     return ALLOWED_EXTENSIONS.includes(ext);
 }
 
+function getISTTimestamp(): string {
+    const now = new Date();
+    // Use Intl.DateTimeFormat for robust IST formatting
+    return new Intl.DateTimeFormat('en-IN', {
+        timeZone: 'Asia/Kolkata',
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: true
+    }).format(now).replace(',', '');
+}
+
 async function loadMetadata(): Promise<Record<string, MediaMetadata> | null> {
     try {
         if (IS_VERCEL) {
@@ -36,12 +50,17 @@ async function loadMetadata(): Promise<Record<string, MediaMetadata> | null> {
             try {
                 const blobs = await list({ prefix: METADATA_BLOB_NAME, limit: 1 });
                 if (blobs.blobs.length > 0) {
-                    const response = await fetch(blobs.blobs[0].url, { cache: 'no-store' });
+                    // Active Cache-Busting: Append current timestamp to force bypass CDN cache
+                    const cacheBuster = `?t=${Date.now()}`;
+                    const response = await fetch(blobs.blobs[0].url + cacheBuster, { cache: 'no-store' });
+
                     if (response.ok) return await response.json();
                     if (response.status === 404) return {};
-                    return null; // Error response from blob storage
+
+                    console.error(`Metadata fetch failed: ${response.status} ${response.statusText}`);
+                    return null;
                 }
-                return {}; // No metadata blob yet
+                return {};
             } catch (error) {
                 console.error('Error listing/fetching metadata from blob:', error);
                 return null;
