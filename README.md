@@ -15,6 +15,3 @@ A high-performance Media Management System built with **Next.js**, featuring hyb
 
 ## 📖 Documentation
 For a full technical breakdown, API reference, and Vercel deployment steps, please refer to the **[Project Documentation](C:\Users\geeta\.gemini\antigravity\brain\73ed1d4d-da27-4cfa-af11-d67c51cec887\MASTER_DOCUMENTATION.md)**.
-
----
-*Created with ❤️ by Antigravity*
