@@ -98,9 +98,9 @@ export async function GET(request: NextRequest) {
                         // Handle Vercel suffix (same logic as root)
                         let filename = fullPathname;
                         const ext = path.extname(filename).toLowerCase();
-                        const baseName = path.basename(filename, ext);
-                        if (baseName.includes('-')) {
-                            const parts = baseName.split('-');
+                        const baseNameNoExt = path.basename(filename, ext);
+                        if (baseNameNoExt.includes('-')) {
+                            const parts = baseNameNoExt.split('-');
                             const lastPart = parts[parts.length - 1];
                             if (lastPart && lastPart.length === 32 && /^[a-zA-Z0-9]+$/.test(lastPart)) {
                                 filename = parts.slice(0, -1).join('-') + ext;
@@ -108,17 +108,30 @@ export async function GET(request: NextRequest) {
                         }
 
                         const isAudio = ['.mp3', '.wav', '.m4a', '.aac'].includes(ext);
-                        const fileMetadata = metadata[filename] || metadata[fullPathname] || {};
+
+                        // Robust Metadata Matching
+                        let fileMetadata = metadata[filename] || metadata[fullPathname] || {};
+
+                        if (!fileMetadata.title || fileMetadata.title === 'Untitled') {
+                            const strippedBase = filename.replace(ext, '').toLowerCase();
+                            const matchingKey = Object.keys(metadata).find(key => {
+                                const keyBase = key.replace(path.extname(key), '').toLowerCase();
+                                return keyBase === strippedBase || keyBase.includes(strippedBase) || strippedBase.includes(keyBase);
+                            });
+                            if (matchingKey) {
+                                fileMetadata = { ...fileMetadata, ...metadata[matchingKey] };
+                            }
+                        }
 
                         return {
                             filename: filename,
                             url: blob.url,
                             video_url: `/videos/${filename}`,
                             title: fileMetadata.title || filename.replace(ext, '').replace(/_/g, ' ').trim() || 'Untitled',
-                            description: fileMetadata.description || '',
-                            type: isAudio ? 'audio' : 'video',
+                            description: fileMetadata.description || (isAudio ? 'Audio file' : 'Video file'),
+                            type: fileMetadata.type || (isAudio ? 'audio' : 'video'),
                             size: (blob as any).size || null,
-                            uploadedAt: (blob as any).uploadedAt || null,
+                            uploadedAt: fileMetadata.uploadedAt || (blob as any).uploadedAt || null,
                         };
                     });
 
@@ -129,7 +142,9 @@ export async function GET(request: NextRequest) {
                         // Find the thumbnail blob for this YouTube item
                         const thumbBlob = allBlobs.find(b => {
                             const bPath = b.pathname.split('/').pop() || '';
-                            return bPath === m.filename || bPath.startsWith(m.filename.split('.')[0]);
+                            const bBase = bPath.split('.')[0].toLowerCase();
+                            const mBase = m.filename.split('.')[0].toLowerCase();
+                            return bPath === m.filename || bBase === mBase || bBase.includes(mBase) || mBase.includes(bBase);
                         });
 
                         return {
@@ -191,9 +206,24 @@ export async function GET(request: NextRequest) {
             }
         }
 
-        mediaFiles.sort((a, b) => a.title.localeCompare(b.title));
+        // Sort by upload date (newest first)
+        mediaFiles.sort((a, b) => {
+            const dateA = a.uploadedAt ? new Date(a.uploadedAt).getTime() : 0;
+            const dateB = b.uploadedAt ? new Date(b.uploadedAt).getTime() : 0;
+            return dateB - dateA;
+        });
 
-        return NextResponse.json({ success: true, count: mediaFiles.length, media: mediaFiles });
+        return NextResponse.json({
+            success: true,
+            count: mediaFiles.length,
+            media: mediaFiles
+        }, {
+            headers: {
+                'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+                'Pragma': 'no-cache',
+                'Expires': '0'
+            }
+        });
     } catch (error) {
         console.error('Error fetching media:', error);
         return NextResponse.json({ error: 'Failed to fetch media' }, { status: 500 });

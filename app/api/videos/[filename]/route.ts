@@ -94,25 +94,65 @@ export async function GET(
         }
 
         if (IS_VERCEL) {
-            let allBlobs: any[] = [];
-            let cursor: string | undefined = undefined;
-
-            do {
-                const result: { blobs: any[]; cursor?: string } = await list({ limit: 1000, cursor });
-                allBlobs = allBlobs.concat(result.blobs);
-                cursor = result.cursor;
-            } while (cursor);
-
-            const decodedFilename = decodeURIComponent(filename);
-            const blob = allBlobs.find((b: any) => {
-                const blobFilename = b.pathname.split('/').pop() || b.pathname;
-                return blobFilename === decodedFilename || blobFilename === filename;
-            });
-
-            if (blob && blob.url) {
-                return NextResponse.redirect(blob.url);
+            if (!process.env.BLOB_READ_WRITE_TOKEN) {
+                return NextResponse.json({ error: 'Blob storage not configured' }, { status: 503 });
             }
-            return NextResponse.json({ error: 'File not found' }, { status: 404 });
+            try {
+                const { list } = await import('@vercel/blob');
+
+                let allBlobs: any[] = [];
+                let cursor: string | undefined = undefined;
+
+                do {
+                    const result: { blobs: any[]; cursor?: string } = await list({ limit: 1000, cursor });
+                    allBlobs = allBlobs.concat(result.blobs);
+                    cursor = result.cursor;
+                } while (cursor);
+
+                const decodedFilename = decodeURIComponent(filename);
+                const normalizedRequest = decodedFilename.toLowerCase();
+
+                // Strategy 1: Exact match
+                let blob: any = allBlobs.find((b: any) => {
+                    const blobFilename = b.pathname.split('/').pop() || b.pathname;
+                    return blobFilename === decodedFilename || blobFilename === filename;
+                });
+
+                // Strategy 2: Case-insensitive match
+                if (!blob) {
+                    blob = allBlobs.find((b: any) => {
+                        const blobFilename = b.pathname.split('/').pop() || b.pathname;
+                        return blobFilename.toLowerCase() === normalizedRequest;
+                    });
+                }
+
+                // Strategy 3: Base name match (ignoring Vercel suffix)
+                if (!blob) {
+                    const ext = path.extname(decodedFilename).toLowerCase();
+                    const baseName = path.basename(decodedFilename, ext).toLowerCase();
+
+                    blob = allBlobs.find((b: any) => {
+                        const bPath = b.pathname.split('/').pop() || '';
+                        const bExt = path.extname(bPath).toLowerCase();
+                        if (bExt !== ext) return false;
+
+                        const bBase = path.basename(bPath, bExt);
+                        // Vercel suffixes are usually after a hyphen or part of a random hash
+                        return bBase.toLowerCase().startsWith(baseName) ||
+                            baseName.startsWith(bBase.toLowerCase().split('-')[0]);
+                    });
+                }
+
+                console.log(`GET - Looking for: ${filename}, Found: ${blob ? blob.pathname : 'None'}`);
+
+                if (blob && blob.url) {
+                    return NextResponse.redirect(blob.url);
+                }
+                return NextResponse.json({ error: 'File not found' }, { status: 404 });
+            } catch (error) {
+                console.error('Error fetching blob:', error);
+                return NextResponse.json({ error: 'File not found' }, { status: 404 });
+            }
         }
 
         const filePath = path.join(UPLOAD_DIR, filename);
@@ -170,10 +210,37 @@ export async function DELETE(
                 cursor = result.cursor;
             } while (cursor);
 
-            const blob = allBlobs.find((b: any) => {
+            const normalizedRequest = decodedFilename.toLowerCase();
+
+            // Strategy 1: Exact match
+            let blob: any = allBlobs.find((b: any) => {
                 const blobFilename = b.pathname.split('/').pop() || b.pathname;
                 return blobFilename === decodedFilename || blobFilename === filename;
             });
+
+            // Strategy 2: Case-insensitive match
+            if (!blob) {
+                blob = allBlobs.find((b: any) => {
+                    const blobFilename = b.pathname.split('/').pop() || b.pathname;
+                    return blobFilename.toLowerCase() === normalizedRequest;
+                });
+            }
+
+            // Strategy 3: Base name match (ignoring Vercel suffix)
+            if (!blob) {
+                const ext = path.extname(decodedFilename).toLowerCase();
+                const baseName = path.basename(decodedFilename, ext).toLowerCase();
+
+                blob = allBlobs.find((b: any) => {
+                    const bPath = b.pathname.split('/').pop() || '';
+                    const bExt = path.extname(bPath).toLowerCase();
+                    if (bExt !== ext) return false;
+
+                    const bBase = path.basename(bPath, bExt);
+                    return bBase.toLowerCase().startsWith(baseName) ||
+                        baseName.startsWith(bBase.toLowerCase().split('-')[0]);
+                });
+            }
 
             if (blob) {
                 console.log(`Found blob to delete: ${blob.url}`);
