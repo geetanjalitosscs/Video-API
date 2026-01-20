@@ -35,22 +35,24 @@ function formatToIST(dateInput: any): string | null {
         const date = new Date(dateInput);
         if (isNaN(date.getTime())) return String(dateInput);
 
+        // Exact format as seen in screenshot: 20/01/2026, 15:04:52
         return new Intl.DateTimeFormat('en-IN', {
             timeZone: 'Asia/Kolkata',
             day: '2-digit',
-            month: 'short',
+            month: '2-digit',
             year: 'numeric',
             hour: '2-digit',
             minute: '2-digit',
-            hour12: true
-        }).format(date).replace(',', '');
+            second: '2-digit',
+            hour12: false
+        }).format(date);
     } catch {
         return String(dateInput);
     }
 }
 
 function getISTTimestamp(): string {
-    return formatToIST(new Date()) || '';
+    return new Date().toISOString();
 }
 
 async function loadMetadata(): Promise<Record<string, MediaMetadata> | null> {
@@ -160,6 +162,7 @@ export async function GET(request: NextRequest) {
                             description: fileMetadata.description || (isAudio ? 'Audio file' : 'Video file'),
                             type: fileMetadata.type || (isAudio ? 'audio' : 'video'),
                             size: (blob as any).size || null,
+                            rawDate: fileMetadata.uploadedAt || (blob as any).uploadedAt,
                             uploadedAt: formatToIST(fileMetadata.uploadedAt || (blob as any).uploadedAt),
                         };
                     });
@@ -176,6 +179,8 @@ export async function GET(request: NextRequest) {
                             return bPath === m.filename || bBase === mBase || bBase.includes(mBase) || mBase.includes(bBase);
                         });
 
+                        const fallbackDate = (thumbBlob as any)?.uploadedAt;
+
                         return {
                             filename: m.filename,
                             youtube_video_url: m.youtubeUrl,
@@ -183,7 +188,8 @@ export async function GET(request: NextRequest) {
                             title: m.title || 'YouTube Video',
                             description: m.description || '',
                             type: 'youtube',
-                            uploadedAt: m.uploadedAt || null,
+                            rawDate: m.uploadedAt || fallbackDate,
+                            uploadedAt: formatToIST(m.uploadedAt || fallbackDate),
                         };
                     });
 
@@ -212,6 +218,7 @@ export async function GET(request: NextRequest) {
                             description: fileMetadata.description || '',
                             type: isAudio ? 'audio' : 'video',
                             size: stats ? stats.size : null,
+                            rawDate: fileMetadata.uploadedAt || (stats ? stats.mtime : null),
                             uploadedAt: formatToIST(fileMetadata.uploadedAt || (stats ? stats.mtime : null)),
                         };
                     });
@@ -220,6 +227,10 @@ export async function GET(request: NextRequest) {
                 const youtubeItems = Object.values(metadata)
                     .filter(m => m.type === 'youtube' && m.youtubeUrl)
                     .map(m => {
+                        const thumbPath = path.join(UPLOAD_DIR, m.filename || '');
+                        const thumbStats = existsSync(thumbPath) ? require('fs').statSync(thumbPath) : null;
+                        const fallbackDate = thumbStats ? thumbStats.mtime : null;
+
                         return {
                             filename: m.filename,
                             youtube_video_url: m.youtubeUrl,
@@ -227,7 +238,8 @@ export async function GET(request: NextRequest) {
                             title: m.title || 'YouTube Video',
                             description: m.description || '',
                             type: 'youtube',
-                            uploadedAt: m.uploadedAt || null,
+                            rawDate: m.uploadedAt || fallbackDate,
+                            uploadedAt: formatToIST(m.uploadedAt || fallbackDate),
                         };
                     });
 
@@ -237,15 +249,21 @@ export async function GET(request: NextRequest) {
 
         // Sort by upload date (newest first)
         mediaFiles.sort((a, b) => {
-            const dateA = a.uploadedAt ? new Date(a.uploadedAt).getTime() : 0;
-            const dateB = b.uploadedAt ? new Date(b.uploadedAt).getTime() : 0;
-            return dateB - dateA;
+            const dateA = a.rawDate ? new Date(a.rawDate).getTime() : 0;
+            const dateB = b.rawDate ? new Date(b.rawDate).getTime() : 0;
+            // Handle invalid dates from existing formatted entries
+            const timeA = isNaN(dateA) ? 0 : dateA;
+            const timeB = isNaN(dateB) ? 0 : dateB;
+            return timeB - timeA;
         });
+
+        // Clean up rawDate before sending response
+        const finalMedia = mediaFiles.map(({ rawDate, ...rest }) => rest);
 
         return NextResponse.json({
             success: true,
-            count: mediaFiles.length,
-            media: mediaFiles
+            count: finalMedia.length,
+            media: finalMedia
         }, {
             headers: {
                 'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
